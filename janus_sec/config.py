@@ -19,6 +19,10 @@ except ModuleNotFoundError:
     import tomli as tomllib  # Python 3.10 fallback
 
 
+class ConfigError(ValueError):
+    """Raised when user config.toml is malformed or missing required keys."""
+
+
 @dataclass(frozen=True, slots=True)
 class IgnoreEntry:
     path: str
@@ -49,25 +53,46 @@ def load_config(config_path: Path | None = None) -> Config:
     if not config_path.exists():
         return Config(ignore=[], allowlist=[])
 
-    data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    try:
+        data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(
+            f"Invalid TOML in config file {config_path}: {exc}"
+        ) from exc
 
-    ignore = [
-        IgnoreEntry(
-            path=entry["path"],
-            check_type=entry["check_type"],
-            note=entry.get("note", ""),
-        )
-        for entry in data.get("ignore", [])
-    ]
+    ignore = []
+    for index, entry in enumerate(data.get("ignore", [])):
+        try:
+            ignore.append(
+                IgnoreEntry(
+                    path=entry["path"],
+                    check_type=entry["check_type"],
+                    note=entry.get("note", ""),
+                )
+            )
+        except KeyError as exc:
+            missing = exc.args[0]
+            raise ConfigError(
+                f"Config file {config_path}: [[ignore]] entry {index} "
+                f"is missing required key {missing!r}"
+            ) from exc
 
-    allowlist = [
-        AllowlistPattern(
-            group=entry["group"],
-            action=entry.get("action", "suppress"),
-            os_name=entry.get("os"),
-        )
-        for entry in data.get("allowlist", [])
-    ]
+    allowlist = []
+    for index, entry in enumerate(data.get("allowlist", [])):
+        try:
+            allowlist.append(
+                AllowlistPattern(
+                    group=entry["group"],
+                    action=entry.get("action", "suppress"),
+                    os_name=entry.get("os"),
+                )
+            )
+        except KeyError as exc:
+            missing = exc.args[0]
+            raise ConfigError(
+                f"Config file {config_path}: [[allowlist]] entry {index} "
+                f"is missing required key {missing!r}"
+            ) from exc
 
     return Config(ignore=ignore, allowlist=allowlist)
 
