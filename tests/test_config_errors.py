@@ -23,10 +23,7 @@ def test_load_config_invalid_toml_raises_config_error(tmp_path: Path) -> None:
 def test_load_config_missing_ignore_path_raises_config_error(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        """
-[[ignore]]
-check_type = \"group_readable\"
-"""
+        "[[ignore]]\ncheck_type = \"group_readable\"\n"
     )
 
     try:
